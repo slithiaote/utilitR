@@ -173,10 +173,10 @@ En passant directement par `duckdb`, il faut travailler un peu plus pour constru
 conn_ddb %>% tbl("read_parquet('bpe_ens_2018_dataset/*.parquet')", check_from = FALSE)
 ```
 
-Ces deux méthodes utilisent les données directement depuis le dataset Parquet. Les données ne sont chargées ni dans la mémoire de `R`, ni dans celle de `DuckDB`. Pour plus de commodité, on sauvegarde l'instruction précédente dans la variable `bpe_ens_2018_dataset`.
+Un avantage de ces deux méthodes est qu'elle manipulent les données directement depuis le dataset Parquet: les données ne sont chargées ni dans la mémoire de `R`, ni dans celle de `DuckDB`. Pour plus de commodité, on sauvegarde l'instruction précédente dans la variable `bpe_ens_2018_dataset`.
 
 ```{r}
-bpe_ens_2018_dataset <- conn_ddb %>% tbl("read_parquet('bpe_ens_2018_dataset/*.parquet')", check_from = FALSE)
+bpe_ens_2018_ddb <- conn_ddb %>% tbl("read_parquet('bpe_ens_2018_dataset/*.parquet')", check_from = FALSE)
 ```
 
 
@@ -212,7 +212,7 @@ doremifasolData::bpe_ens_2018 |>
 __Manipulation d'une table `duckdb`__
 
 ```{r}
-bpe_ens_2018_dataset |>
+bpe_ens_2018_ddb |>
   group_by(REG) |>
   summarise(
     NB_EQUIP_TOT = sum(NB_EQUIP)
@@ -228,7 +228,7 @@ bpe_ens_2018_dataset |>
 On peut examiner la requête SQL construite par `duckdb` avec la fonction `show_query()`.
 
 ```{r}
-bpe_ens_2018_dataset |>
+bpe_ens_2018_ddb |>
   group_by(REG) |>
   summarise(
     NB_EQUIP_TOT = sum(NB_EQUIP)
@@ -243,16 +243,15 @@ Cette requête est envoyée au serveur SQL et exécutée de façon différente e
 
 __Ce point est important: en utilisant `print()`, on peut prévisualiser le résultat d'une requête `duckdb` de façon très rapide, sans exécuter tout le traitement.__ Il ne faut pas hésiter à s'en servir pour explorer les données et pour construire le traitement étape par étape, en ajustant en fonction des résultats.
 
-
-
-
 ### Écriture au format Parquet 
 
-**Pour écrire une table (ou n'importe quelle requête) sur le disque au format Parquet, on suggère d'utiliser la librairie `arrow`.**
+**Pour écrire une table sur le disque au format Parquet, on suggère d'utiliser la librairie `arrow`.**
 
 ```{r}
-bpe_ens_2018_dataset %>% 
-  arrow::to_arrow() %>% arrow::write_dataset("temp_dataset")
+# Convertir la table duckdb en arrow, puis la sauvegarder en Parquet
+bpe_ens_2018_ddb %>% 
+  arrow::to_arrow() %>% 
+  arrow::write_dataset("temp_dataset")
 list.files("temp_dataset") # liste des fichiers du répertoire temp_dataset/
 ```
 
