@@ -291,10 +291,13 @@ bpe_ens_2018_ddb %>%
 
 ## Comment bien utiliser `duckdb`?
 
+::: {.callout-tip}
+Il est fortement recommandé de lire la fiche [Manipuler des données avec `arrow`](#arrow), notamment la partie sur l'évaluation différée, avant de lire la présente section.
+:::
 
 ### L'évaluation différée avec `duckdb` (_lazy evaluation_) {#sec-lazy-dbb}
 
-Quand on manipule des objets `duckdb`, on construit des requêtes SQL. Le _package_ `duckdb` se contente de traduire le code `R` en `SQL` sans l'exécuter. On rappelle qu'il faut utiliser `show_query()` pour visualiser la requête. La fonction `print()` permet de pré-visualiser le résultat.
+Quand on manipule des objets `duckdb`, on construit des requêtes SQL, mais on ne les exécute pas tant qu'on utilise pas `collect()`, car le _package_ `duckdb` se contente de traduire le code `R` en `SQL` sans l'exécuter. On rappelle qu'il faut utiliser `show_query()` pour visualiser la requête. La fonction `print()` permet de pré-visualiser le résultat.
 
 ```{r}
 # Étape 1: compter les équipements
@@ -312,7 +315,7 @@ req_dep_filter <- req_dep |>
 req_dep_filter |> show_query()
 ```
 
-La fonction `collect()` fait exécuter le calcul, et transmet les résultats à `R`. Avant `collect()`, c'est le moteur SQL de `duckdb` qui fait / fera les calculs. Après `collect()`, c'est `R` qui fait le calcul, et l'on manipule un objet `R` (`tibble`) standard, avec toutes les fonctions / _packages_ disponibles.
+La fonction `collect()` fait exécuter le calcul, et transmet les résultats à `R` sous forme d'un `tibble`. Avant `collect()`, c'est le moteur SQL de `duckdb` qui fait / fera les calculs. Après `collect()`, c'est `R` qui fait le calcul, et l'on manipule un objet `R` (`tibble`) standard, avec toutes les fonctions / _packages_ disponibles.
 
 ```{r}
 req_dep_filter |> collect()
