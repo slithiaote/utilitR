@@ -245,7 +245,7 @@ __Ce point est important: en utilisant `print()`, on peut prévisualiser le rés
 
 ### Écriture au format Parquet 
 
-**Pour écrire une table sur le disque au format Parquet, on suggère d'utiliser la librairie `arrow`.**
+**Pour écrire une table `duckdb` sur le disque au format Parquet, il est recommandé d'utiliser la librairie `arrow`**: on commence par convertir la table `duckdb` en `Arrow Table`, puis on l'écrit sur le disque en format Parquet.
 
 ```{r}
 # Convertir la table duckdb en arrow, puis la sauvegarder en Parquet
@@ -255,46 +255,51 @@ bpe_ens_2018_ddb %>%
 list.files("temp_dataset") # liste des fichiers du répertoire temp_dataset/
 ```
 
-Une autre possibilité est de passer par la commande SQL `COPY ... TO`. Dans mon expérience, passer par `arrow` permet d'exécuter des calculs plus complexes sans faire déborder la mémoire (`arrow` sauvegarde au fur et à mesure), et la syntaxe est plus facile à manipuler, notamment quand on souhaite ajouter des options.
+::: {.callout-tip}
+Il est possible d'écrire une table `duckdb` en format Parquet directement avec `duckdb` en utilisant la commande SQL `COPY ... TO`. Toutefois, il est préférable de passer par `arrow` pour deux raisons: 
 
-
+- Cela permet d'exécuter des calculs plus complexes sans faire exploser la mémoire (car `arrow` sauvegarde au fur et à mesure);
+- `arrow` est plus facile à utiliser pour écrire des données en format Parquet, notamment quand on souhaite ajouter des options ou partitionner les données.
+:::
 
 ### Erreurs courantes 
 
 **On a éliminé des colonnes nécessaires**
 
 ```{r error=TRUE}
-bpe_ens_2018_dataset |> select(DEP) |>
+bpe_ens_2018_ddb |> select(DEP) |>
       mutate(NB_EQUIP_TOTAL_DEP  = sum(NB_EQUIP))
 ```
 
 **Convertir les types**
 
-Dans cet exemple, on veut multiplier un nombre par une indicatrice.
+Dans cet exemple, on veut multiplier un nombre par une indicatrice. Cela provoque une erreur.
+
 ```{r error=TRUE}
-bpe_ens_2018_dataset %>%
+bpe_ens_2018_ddb %>%
   summarise(nb_boulangeries  = sum(NB_EQUIP * (TYPEQU == "B203")), .by = DEP)
 ```
 
 Avec `duckdb`, il faut transformer explicitement un booléen en nombre (entier ou flottant).
 
 ```{r}
-bpe_ens_2018_dataset %>%
+bpe_ens_2018_ddb %>%
   summarise(nb_boulangeries  = sum(NB_EQUIP * as.integer(TYPEQU == "B203")), .by = DEP)
 ```
 
 
 
-## Notions avancées / bien utiliser `duckdb`
+## Comment bien utiliser `duckdb`?
 
 
-### L'évaluation différée avec `duckdb` (_lazy evaluation_) {#sec-lazy}
+### L'évaluation différée avec `duckdb` (_lazy evaluation_) {#sec-lazy-dbb}
 
 Quand on manipule des objets `duckdb`, on construit des requêtes SQL. Le _package_ `duckdb` se contente de traduire le code `R` en `SQL` sans l'exécuter. On rappelle qu'il faut utiliser `show_query()` pour visualiser la requête. La fonction `print()` permet de pré-visualiser le résultat.
+
 ```{r}
 # Étape 1: compter les équipements
 req_dep <- 
-  bpe_ens_2018_dataset |>
+  bpe_ens_2018_ddb |>
   group_by(DEP) |> 
   summarise(
     NB_EQUIP_TOT = sum(NB_EQUIP)
@@ -308,6 +313,7 @@ req_dep_filter |> show_query()
 ```
 
 La fonction `collect()` fait exécuter le calcul, et transmet les résultats à `R`. Avant `collect()`, c'est le moteur SQL de `duckdb` qui fait / fera les calculs. Après `collect()`, c'est `R` qui fait le calcul, et l'on manipule un objet `R` (`tibble`) standard, avec toutes les fonctions / _packages_ disponibles.
+
 ```{r}
 req_dep_filter |> collect()
 ```
@@ -328,7 +334,7 @@ La première étape de traitement est déclenchée par `collect()`, la table int
 ```{r}
 # Etape 1
 res_etape1 <- 
-  bpe_ens_2018_dataset |>
+  bpe_ens_2018_ddb |>
   group_by(DEP) |>
   summarise(
     NB_EQUIP_TOT = sum(NB_EQUIP)
@@ -359,11 +365,11 @@ La première étape construit une requête SQL, sans effectuer de calcul. La deu
 
 ```{r}
 # Etape 1
-res_etape1 <- bpe_ens_2018_dataset |>
+res_etape1 <- bpe_ens_2018_ddb |>
   group_by(DEP) |>
   summarise(
     NB_EQUIP_TOT = sum(NB_EQUIP)
-  ) 
+  )
 
 # Etape 2
 res_final <- res_etape1 |> 
@@ -379,7 +385,11 @@ res_final |> arrow::to_arrow() |>
 ::::
 
 ::: {.callout-tip}
-Si vous ne savez plus si une table de données est une requête SQL ou un `tibble`, il suffit d'exécuter `print()`.
+Si vous ne savez plus si une table de données est une requête SQL écrite par `duckdb`, un `Arrow Table` ou un `tibble`, il suffit d'exécuter `class(le_nom_de_ma_table)`. 
+
+- Si la table est une requête SQL écrite par `duckdb`, vous obtiendrez ceci: `"tbl_duckdb_connection" "tbl_dbi"               "tbl_sql"  "tbl_lazy"              "tbl" `. 
+- Si la table est un `Arrow Table`, vous obtiendrez ceci: `"Table"        "ArrowTabular" "ArrowObject"  "R6"`. 
+- Si la table est un `tibble`, vous obtiendrez `"tbl_df"     "tbl"        "data.frame"`.
 :::
 
 
@@ -389,7 +399,7 @@ Que faire quand la traduction automatique ne fonctionne pas ? Pour les fonctions
 
 **Facile : les fonctions non connues par le _package_ `duckdb` sont écrites directement dans le code SQL**, y compris lorsqu'elles n'existent pas.
 ```{r}
-req <- bpe_ens_2018_dataset |> 
+req <- bpe_ens_2018_ddb |> 
   mutate(test = fonction_inexistante(DEP)) |> 
   show_query()
 ```
